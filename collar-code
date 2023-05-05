@@ -1,0 +1,114 @@
+import numpy as np
+import pandas as pd
+import ast
+from sklearn.feature_extraction.text import CountVectorizer
+from nltk.stem import PorterStemmer
+from sklearn.metrics.pairwise import cosine_similarity
+import pickle
+
+
+movies = pd.read_csv('/content/tmdb_5000_movies.csv')
+credits = pd.read_csv('/content/tmdb_5000_credits.csv')
+
+#lets merge the 2 datasets on the basis of title
+dataset = movies.merge(credits,on='title')
+dataset.shape
+
+dataset = dataset[['movie_id','title','overview','genres','keywords','cast','crew'] ]
+dataset.isnull().sum()
+
+dataset.dropna(inplace=True)
+
+import ast
+ast.literal_eval
+
+def convert(obj):
+   L=[]
+   for i in ast.literal_eval(obj):# obj will be string is operation ke baad woh string ek list banega and usko baad main loop operation chla paunga
+     L.append(i['name'])
+   return L
+
+dataset['genres'] = dataset['genres'].apply(convert)
+dataset['keywords']=dataset['keywords'].apply(convert)
+dataset['keywords']=dataset['keywords'].apply(convert)
+def convert3(obj):
+  L=[]
+  counter = 0
+  for i in ast.literal_eval(obj):
+    if counter != 3:
+      L.append(i['name'])
+      counter+=1
+    else:
+      break
+  return L
+  
+dataset['cast']=dataset['cast'].apply(convert3)
+ 
+def fetch_director(obj):
+  L=[]
+  for i in ast.literal_eval(obj):
+    if i['job'] == 'Director':
+      L.append(i['name'])
+      break
+  return L
+    
+dataset['crew']=dataset['crew'].apply(fetch_director)
+dataset['overview'] = dataset['overview'].apply(lambda x:x.split())
+  
+  
+dataset['genres'] = dataset['genres'].apply(lambda x:[i.replace(" ","") for i in x])
+dataset['keywords'] = dataset['keywords'].apply(lambda x:[i.replace(" ","") for i in x])
+dataset['cast'] = dataset['cast'].apply(lambda x:[i.replace(" ","") for i in x])
+dataset['crew'] = dataset['crew'].apply(lambda x:[i.replace(" ","") for i in x])
+  
+dataset['tags'] = dataset['overview'] + dataset['genres'] + dataset['keywords'] + dataset['crew'] + dataset['cast']
+new_ds = dataset[['movie_id','title','tags']]
+  
+  
+new_ds['tags'] = new_ds['tags'].apply(lambda x:" ".join(x)) 
+new_ds['tags'] = new_ds['tags'].apply(lambda x:x.lower())
+
+from sklearn.feature_extraction.text import CountVectorizer
+cv = CountVectorizer(max_features=5000,stop_words='english')
+  
+vectors = cv.fit_transform(new_ds['tags']).toarray()
+cv.fit_transform(new_ds['tags']).toarray().shape
+
+import nltk
+from nltk.stem import PorterStemmer
+ps = PorterStemmer()
+
+
+def stem(text):
+  y = []
+  for i in text.split():  # string converted to list
+    y.append(ps.stem(i))
+  return " ".join(y)
+  
+new_ds['tags'].apply(stem)  
+from sklearn.feature_extraction.text import CountVectorizer
+cv = CountVectorizer(max_features=5000,stop_words='english')
+
+vectors = cv.fit_transform(new_ds['tags']).toarray()
+from sklearn.metrics.pairwise import cosine_similarity
+cs = cosine_similarity
+similarity = cs(vectors)
+
+def recommend(movie):
+  movie_index = new_ds[new_ds['title'] == movie].index[0]
+  distances = similarity[movie_index]
+  movies_list = sorted(list(enumerate(distances)),reverse=True,key=lambda x:x[1])[1:6]
+  
+  for i in movies_list:
+    print(new_ds.iloc[i[0]].title)
+
+recommend('Avatar')
+
+# this is to  download required code in pkl format for streamlit
+import pickle
+pickle.dump(new_ds,open('movies.pkl','wb'))
+pickle.dump(similarity,open('similarity.pkl','wb'))
+pickle.dump(new_ds.to_dict(),open('movie_dict.pkl','wb'))
+  
+  
+  
